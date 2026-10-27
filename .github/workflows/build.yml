@@ -1,0 +1,43 @@
+name: Собрать и опубликовать образ воркера
+
+# Пушим встроенным токеном Actions: личный ключ с правом записи в реестр
+# не нужен, а образ (~12 ГБ, веса качаются при старте воркера) собирается прямо здесь.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Забрать исходники
+        uses: actions/checkout@v4
+
+      - name: Освободить место под образ
+        run: |
+          # На бегунке занято системным софтом, которого сборке не нужно.
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+                      /usr/local/share/boost /opt/hostedtoolcache
+          df -h / | tail -1
+
+      - name: Войти в реестр
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Собрать и отправить
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/gen3d-worker:v1
+            ghcr.io/${{ github.repository_owner }}/gen3d-worker:latest
+          provenance: false
